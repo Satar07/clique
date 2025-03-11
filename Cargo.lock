@@ -6,7 +6,6 @@ version = 4
 name = "clique"
 version = "0.1.0"
 dependencies = [
- "log",
  "petgraph",
  "thiserror",
 ]
@@ -38,12 +37,6 @@ dependencies = [
  "equivalent",
  "hashbrown",
 ]
-
-[[package]]
-name = "log"
-version = "0.4.26"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30bde2b3dc3671ae49d8e2e9f044c7c005836e7a023ee57cffa25ab82764bb9e"
 
 [[package]]
 name = "petgraph"

@@ -4,6 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-log = "0.4.26"
 petgraph = "0.7.1"
 thiserror = "2.0.12"
