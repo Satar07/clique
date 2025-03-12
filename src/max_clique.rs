@@ -1,22 +1,19 @@
 use petgraph::graph::{NodeIndex, UnGraph};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub fn bron_kerbosch(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
     let mut max_clique = HashSet::new();
-    let all_nodes: HashSet<_> = graph.node_indices().collect();
+    let all_nodes: HashSet<usize> = graph.node_indices().map(|u| u.index()).collect();
 
-    // 预存每个节点的邻居集合和度数
-    let (neighbors, degrees) = {
-        let mut neighbors = HashMap::new();
-        let mut degrees = HashMap::new();
-        for u in graph.node_indices() {
-            let ns: HashSet<_> = graph.neighbors(u).collect();
-            let degree = ns.len();
-            neighbors.insert(u, ns);
-            degrees.insert(u, degree);
-        }
-        (neighbors, degrees)
-    };
+    let node_count = graph.node_count();
+    let mut neighbors = Vec::with_capacity(node_count);
+    let mut degrees = Vec::with_capacity(node_count);
+    for u in graph.node_indices() {
+        let ns: HashSet<usize> = graph.neighbors(u).map(|v| v.index()).collect();
+        let degree = ns.len();
+        neighbors.push(ns);
+        degrees.push(degree);
+    }
 
     bron_kerbosch_pivot(
         &neighbors,
@@ -27,18 +24,17 @@ pub fn bron_kerbosch(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
         &mut max_clique,
     );
 
-    max_clique.into_iter().collect()
+    max_clique.into_iter().map(|u| NodeIndex::new(u)).collect()
 }
 
 fn bron_kerbosch_pivot(
-    neighbors: &HashMap<NodeIndex, HashSet<NodeIndex>>,
-    degrees: &HashMap<NodeIndex, usize>,
-    current_clique: &mut HashSet<NodeIndex>,
-    candidates: &mut HashSet<NodeIndex>,
-    excluded: &mut HashSet<NodeIndex>,
-    max_clique: &mut HashSet<NodeIndex>,
+    neighbors: &[HashSet<usize>],
+    degrees: &[usize],
+    current_clique: &mut HashSet<usize>,
+    candidates: &mut HashSet<usize>,
+    excluded: &mut HashSet<usize>,
+    max_clique: &mut HashSet<usize>,
 ) {
-    // 剪枝：当前团无法超越最大团
     if current_clique.len() + candidates.len() <= max_clique.len() {
         return;
     }
@@ -54,23 +50,17 @@ fn bron_kerbosch_pivot(
     let pivot = candidates
         .iter()
         .chain(excluded.iter())
-        .max_by_key(|&u| degrees[u])
+        .max_by_key(|&&u| degrees[u])
         .copied();
 
     let remaining = if let Some(p) = pivot {
-        // 候选集中排除p的邻居
-        candidates
-            .difference(neighbors.get(&p).unwrap())
-            .cloned()
-            .collect()
+        candidates.difference(&neighbors[p]).cloned().collect()
     } else {
         candidates.clone()
     };
 
     for u in remaining {
-        let u_neighbors = neighbors.get(&u).unwrap();
-
-        // 生成新的候选集和排除集
+        let u_neighbors = &neighbors[u];
         let mut new_candidates = candidates.intersection(u_neighbors).cloned().collect();
         let mut new_excluded = excluded.intersection(u_neighbors).cloned().collect();
 
