@@ -6,3 +6,8 @@ edition = "2024"
 [dependencies]
 petgraph = "0.7.1"
 thiserror = "2.0.12"
+
+[profile.test]
+opt-level = 3
+debug = false
+

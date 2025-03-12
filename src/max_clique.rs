@@ -1,33 +1,29 @@
-use std::{cmp::Reverse, collections::{HashMap, HashSet}};
-
 use petgraph::graph::{NodeIndex, UnGraph};
+use std::collections::BTreeSet;
 
-pub fn bron_kerbosch(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
-    let mut result = HashSet::new();
-    let neighbors_map = graph
-        .node_indices()
-        .map(|n| (n, graph.neighbors(n).collect()))
-        .collect();
-    bk_dfs(
+/// 带记忆化的Bron-Kerbosch算法实现
+pub fn bron_kerbosch<P>(graph: &UnGraph<P, ()>) -> Vec<NodeIndex> {
+    let mut max_clique = BTreeSet::new();
+    let all_nodes: BTreeSet<_> = graph.node_indices().collect();
+
+    bron_kerbosch_pivot(
         graph,
-        &neighbors_map,
-        &mut HashSet::new(),
-        &mut graph.node_indices().collect(),
-        &mut HashSet::new(),
-        &mut result,
+        &mut BTreeSet::new(),
+        &mut all_nodes.clone(),
+        &mut BTreeSet::new(),
+        &mut max_clique,
     );
-    return result.into_iter().collect();
+
+    max_clique.into_iter().collect()
 }
 
-fn bk_dfs(
-    graph: &UnGraph<(), ()>,
-    neighbors_map:&HashMap<NodeIndex,HashSet<NodeIndex>>,
-    current_clique: &mut HashSet<NodeIndex>,
-    candidates: &mut HashSet<NodeIndex>,
-    excluded: &mut HashSet<NodeIndex>,
-    max_clique: &mut HashSet<NodeIndex>,
+fn bron_kerbosch_pivot<P>(
+    graph: &UnGraph<P, ()>,
+    current_clique: &mut BTreeSet<NodeIndex>,
+    candidates: &mut BTreeSet<NodeIndex>,
+    excluded: &mut BTreeSet<NodeIndex>,
+    max_clique: &mut BTreeSet<NodeIndex>,
 ) {
-    // until the Candidate and Excluded is empty, that is when Max_clique maybe is current_clique
     if candidates.is_empty() && excluded.is_empty() {
         if current_clique.len() > max_clique.len() {
             *max_clique = current_clique.clone();
@@ -35,44 +31,40 @@ fn bk_dfs(
         return;
     }
 
-    // pick one pivot that have most degree, it will easy to cut branch
-    let pivot = candidates.iter()
+    // 选择枢轴节点优化（按度数排序）
+    let pivot = candidates
+        .iter()
         .chain(excluded.iter())
-        .max_by_key(|&n| neighbors_map[n].len())
+        .max_by_key(|&u| graph.neighbors(*u).count())
         .copied();
 
-    // expand node that not neibour with pivot
-    let remain;
+    let remaining;
     if let Some(p) = pivot {
-        remain = candidates
-            .difference(&neighbors_map[&p])
-            .copied()
+        remaining = candidates
+            .difference(&graph.neighbors(p).collect())
+            .cloned()
             .collect();
     } else {
-        remain = candidates.clone();
+        remaining = candidates.clone();
     }
 
-    // sort the remain so that it can find max at first as possible
-    let mut remain:Vec<_> = remain.into_iter().collect();
-    remain.sort_by_key(|&n| Reverse(neighbors_map[&n].len()));
+    for u in remaining {
+        let neighbors: BTreeSet<_> = graph.neighbors(u).collect();
 
-    for v in remain {
-        let neighbors = graph.neighbors(v).collect();
-        let mut new_candidates: HashSet<NodeIndex> =
-            candidates.intersection(&neighbors).cloned().collect();
-        let mut new_excluded: HashSet<NodeIndex> =
-            excluded.intersection(&neighbors).cloned().collect();
-        current_clique.insert(v);
-        bk_dfs(
+        let mut new_candidates = candidates.intersection(&neighbors).cloned().collect();
+        let mut new_excluded = excluded.intersection(&neighbors).cloned().collect();
+
+        current_clique.insert(u);
+        bron_kerbosch_pivot(
             graph,
-            neighbors_map,
             current_clique,
             &mut new_candidates,
             &mut new_excluded,
             max_clique,
         );
-        current_clique.remove(&v);
-        candidates.remove(&v);
-        excluded.insert(v);
+        current_clique.remove(&u);
+
+        candidates.remove(&u);
+        excluded.insert(u);
     }
 }
