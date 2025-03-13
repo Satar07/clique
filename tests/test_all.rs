@@ -3,13 +3,17 @@
 #[cfg(test)]
 mod tests {
     use clique::graph_reader::read_dimacs;
-    use clique::max_clique::bron_kerbosch;
+    use clique::max_clique::find_max_cliques;
     use rstest::rstest;
     use std::time::Instant;
 
     #[rstest]
     #[case("brock200_2.clq", 12)]
     #[case("brock200_4.clq", 17)]
+    #[case("brock400_2.clq", 29)]
+    #[case("brock400_4.clq", 33)]
+    #[case("brock800_2.clq", 24)]
+    #[case("brock800_4.clq", 26)]
     #[case("C125.9.clq", 34)]
     #[case("C250.9.clq", 44)]
     #[case("C500.9.clq", 57)]
@@ -60,7 +64,7 @@ mod tests {
 
         // 3. 执行算法并计时
         let start = Instant::now();
-        let clique = bron_kerbosch(&graph);
+        let clique = find_max_cliques(&graph);
         let duration = start.elapsed();
 
         // 4. 断言结果

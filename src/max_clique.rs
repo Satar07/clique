@@ -1,7 +1,7 @@
 use petgraph::graph::{NodeIndex, UnGraph};
 use std::collections::HashSet;
 
-pub fn bron_kerbosch(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
+pub fn find_max_cliques(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
     let mut max_clique = HashSet::new();
     let all_nodes: HashSet<usize> = graph.node_indices().map(|u| u.index()).collect();
 
