@@ -18,3 +18,4 @@ debug = true
 target-cpu = "native"
 lto = true
 codegen-units = 1
+

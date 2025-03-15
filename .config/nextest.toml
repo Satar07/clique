@@ -1,0 +1,4 @@
+[profile.default]
+fail-fast = false
+slow-timeout = { period = "10s", terminate-after = 3 }
+success-output = "final"
