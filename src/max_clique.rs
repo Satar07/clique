@@ -1,80 +1,146 @@
+use fixedbitset::FixedBitSet;
 use petgraph::graph::{NodeIndex, UnGraph};
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 pub fn find_max_cliques(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
-    let mut max_clique = HashSet::new();
-    let all_nodes: HashSet<usize> = graph.node_indices().map(|u| u.index()).collect();
+    find_max_cliques_with_bk(graph)
+}
 
+pub fn find_max_cliques_with_bk(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
     let node_count = graph.node_count();
-    let mut neighbors = Vec::with_capacity(node_count);
-    let mut degrees = Vec::with_capacity(node_count);
+    
+    // 1. 构建原始邻接表
+    let mut neighbors = vec![FixedBitSet::with_capacity(node_count); node_count];
     for u in graph.node_indices() {
-        let ns: HashSet<usize> = graph.neighbors(u).map(|v| v.index()).collect();
-        let degree = ns.len();
-        neighbors.push(ns);
-        degrees.push(degree);
+        let idx = u.index();
+        for v in graph.neighbors(u) {
+            neighbors[idx].insert(v.index());
+        }
     }
 
+    // 2. 创建排序映射
+    let (sorted_nodes, old_to_new) = {
+        let mut nodes: Vec<usize> = (0..node_count).collect();
+        nodes.sort_unstable_by_key(|&u| -(neighbors[u].count_ones(..) as i32));
+        
+        // 创建旧索引到新索引的映射
+        let mut mapping = vec![0; node_count];
+        for (new_idx, &old_idx) in nodes.iter().enumerate() {
+            mapping[old_idx] = new_idx;
+        }
+        (nodes, mapping)
+    };
+
+    // 3. 构建排序后的邻接表
+    let sorted_neighbors: Vec<FixedBitSet> = sorted_nodes.iter()
+        .map(|&old_idx| {
+            neighbors[old_idx].ones()
+                .map(|old_nb| old_to_new[old_nb])
+                .collect()
+        })
+        .collect();
+
+    // 4. 初始化集合
+    let mut max_clique = FixedBitSet::with_capacity(node_count);
+    let mut candidates = FixedBitSet::from_iter(0..node_count);
+    let mut excluded = FixedBitSet::with_capacity(node_count);
+    
     bron_kerbosch_pivot(
-        &neighbors,
-        &degrees,
-        &mut HashSet::new(),
-        &mut all_nodes.clone(),
-        &mut HashSet::new(),
+        &sorted_neighbors,
+        &mut FixedBitSet::with_capacity(node_count),
+        &mut candidates,
+        &mut excluded,
         &mut max_clique,
     );
 
-    max_clique.into_iter().map(|u| NodeIndex::new(u)).collect()
+    // 5. 转换结果
+    max_clique.ones()
+        .map(|sorted_idx| NodeIndex::new(sorted_nodes[sorted_idx]))
+        .collect()
 }
 
 fn bron_kerbosch_pivot(
-    neighbors: &[HashSet<usize>],
-    degrees: &[usize],
-    current_clique: &mut HashSet<usize>,
-    candidates: &mut HashSet<usize>,
-    excluded: &mut HashSet<usize>,
-    max_clique: &mut HashSet<usize>,
+    neighbors: &[FixedBitSet],
+    current_clique: &mut FixedBitSet,
+    candidates: &mut FixedBitSet,
+    excluded: &mut FixedBitSet,
+    max_clique: &mut FixedBitSet,
 ) {
-    if current_clique.len() + candidates.len() <= max_clique.len() {
+    // 预计算大小
+    let current_size = current_clique.count_ones(..);
+    let candidates_size = candidates.count_ones(..);
+    
+    // 剪枝条件
+    if current_size + candidates_size <= max_clique.count_ones(..) {
         return;
     }
 
-    if candidates.is_empty() && excluded.is_empty() {
-        if current_clique.len() > max_clique.len() {
-            *max_clique = current_clique.clone();
+    // 终止条件
+    if candidates.is_empty() {
+        if excluded.is_empty() && current_size > max_clique.count_ones(..) {
+            max_clique.clone_from(current_clique);
         }
         return;
     }
 
-    // 选择枢轴节点（度数最大）
-    let pivot = candidates
-        .iter()
-        .chain(excluded.iter())
-        .max_by_key(|&&u| degrees[u])
-        .copied();
-
-    let remaining = if let Some(p) = pivot {
-        candidates.difference(&neighbors[p]).cloned().collect()
+    // 选择枢轴
+    let pivot = select_pivot(candidates, excluded, neighbors);
+    
+    // 生成remaining集合
+    let mut remaining = if let Some(p) = pivot {
+        let mut diff = candidates.clone();
+        diff.difference_with(&neighbors[p]);
+        diff
     } else {
         candidates.clone()
     };
 
-    for u in remaining {
-        let u_neighbors = &neighbors[u];
-        let mut new_candidates = candidates.intersection(u_neighbors).cloned().collect();
-        let mut new_excluded = excluded.intersection(u_neighbors).cloned().collect();
+    // 遍历所有候选节点
+    while let Some(u) = remaining.ones().next() {
+        // 生成新候选集
+        let mut new_candidates = candidates.clone();
+        new_candidates.intersect_with(&neighbors[u]);
+        
+        // 提前剪枝
+        if current_size + 1 + new_candidates.count_ones(..) <= max_clique.count_ones(..) {
+            candidates.remove(u);
+            excluded.insert(u);
+            remaining.remove(u);
+            continue;
+        }
 
+        // 准备递归参数
         current_clique.insert(u);
+        let mut new_excluded = excluded.clone();
+        new_excluded.intersect_with(&neighbors[u]);
+        
+        // 递归调用（关键修复：传递副本而非原始引用）
         bron_kerbosch_pivot(
             neighbors,
-            degrees,
             current_clique,
             &mut new_candidates,
             &mut new_excluded,
             max_clique,
         );
-        current_clique.remove(&u);
-        candidates.remove(&u);
+        
+        // 回溯
+        current_clique.remove(u);
+        candidates.remove(u);
         excluded.insert(u);
+        remaining.remove(u); // 关键：确保循环能终止
     }
+}
+
+fn select_pivot(
+    candidates: &FixedBitSet,
+    excluded: &FixedBitSet,
+    neighbors: &[FixedBitSet],
+) -> Option<usize> {
+    candidates.ones()
+        .chain(excluded.ones())
+        .max_by_key(|&u| {
+            let mut tmp = neighbors[u].clone();
+            tmp.intersect_with(candidates);
+            tmp.count_ones(..)
+        })
 }

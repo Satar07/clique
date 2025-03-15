@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use clique::graph_reader::read_dimacs;
-    use clique::max_clique::find_max_cliques;
+    use clique::max_clique::find_max_cliques_with_bk;
     use rstest::rstest;
     use std::time::Instant;
 
@@ -64,7 +64,7 @@ mod tests {
 
         // 3. 执行算法并计时
         let start = Instant::now();
-        let clique = find_max_cliques(&graph);
+        let clique = find_max_cliques_with_bk(&graph);
         let duration = start.elapsed();
 
         // 4. 断言结果
