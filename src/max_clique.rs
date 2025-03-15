@@ -1,6 +1,5 @@
 use fixedbitset::FixedBitSet;
 use petgraph::graph::{NodeIndex, UnGraph};
-use std::collections::HashMap;
 
 pub fn find_max_cliques(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
     find_max_cliques_with_bk(graph)
@@ -76,8 +75,8 @@ fn bron_kerbosch_pivot(
     }
 
     // 终止条件
-    if candidates.is_empty() {
-        if excluded.is_empty() && current_size > max_clique.count_ones(..) {
+    if candidates.is_clear() {
+        if excluded.is_clear() && current_size > max_clique.count_ones(..) {
             max_clique.clone_from(current_clique);
         }
         return;
