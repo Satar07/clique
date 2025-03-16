@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use clique::graph_reader::read_dimacs;
-    use clique::max_clique::find_max_cliques_with_bk;
+    use clique::max_clique::{find_max_cliques};
     use rstest::rstest;
     use std::time::Instant;
 
@@ -46,10 +46,10 @@ mod tests {
     #[case::p_hat1500_2("p_hat1500-2.clq", 65)]
     #[case::p_hat1500_3("p_hat1500-3.clq", 94)]
     #[tokio::test]
+    #[allow(non_snake_case)]
     async fn parallel_clique_test(
         #[case] filename: &str,
-        #[case] expected_size: usize,
-    ) {
+        #[case] expected_size: usize,  ) {
         // 1. 构建文件路径
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let file_path = format!("{}/data/{}", manifest_dir, filename);
@@ -60,7 +60,7 @@ mod tests {
 
         // 3. 执行算法并计时
         let start = Instant::now();
-        let clique = find_max_cliques_with_bk(&graph);
+        let clique = find_max_cliques(&graph);
         let duration = start.elapsed();
 
         // 4. 断言结果
