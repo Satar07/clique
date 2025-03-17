@@ -18,17 +18,17 @@ mod tests {
         assert_eq!(clique.len(), 3);
     }
 
-    #[test]
-    fn test_brock200_4() {
-        let graph = read_dimacs("data/brock200_4.clq").unwrap();
-        let clique = find_max_cliques(&graph);
-        assert_eq!(clique.len(), 17);
-    }
-
     // #[test]
-    // fn test_brock200_2() {
-    //     let graph = read_dimacs("data/brock200_2.clq").unwrap();
+    // fn test_brock200_4() {
+    //     let graph = read_dimacs("data/brock200_4.clq").unwrap();
     //     let clique = find_max_cliques(&graph);
-    //     assert_eq!(clique.len(), 12);
+    //     assert_eq!(clique.len(), 17);
     // }
+
+    #[test]
+    fn test_brock200_2() {
+        let graph = read_dimacs("data/brock200_2.clq").unwrap();
+        let clique = find_max_cliques(&graph);
+        assert_eq!(clique.len(), 12);
+    }
 }

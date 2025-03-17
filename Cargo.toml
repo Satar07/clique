@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bitvec = "1.0.1"
 crossbeam = "0.8.4"
 fixedbitset = "0.5.7"
 petgraph = "0.7.1"
