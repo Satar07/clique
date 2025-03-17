@@ -58,10 +58,9 @@ impl<'a> Clique<'a> {
     }
 
     // 从最大团中移除一个节点
-    fn remove_vertex(&mut self, node: NodeIndex) {
-        if self.clique.remove(&node) {
-            // remove success
-
+    fn remove_vertex(&mut self, node: &NodeIndex) {
+        // if remove success
+        if self.clique.remove(node) {
             // 对于不在最大团里的节点，如果和现有最大团中的都相连，就加入pa
             self.pa = self
                 .graph
@@ -88,10 +87,9 @@ impl<'a> Clique<'a> {
             let nodes: Vec<_> = temp.clique.iter().cloned().collect();
 
             if nodes.len() > 1 {
-                let idx1 = rng.random_range(0..nodes.len());
-                let idx2 = rng.random_range(0..nodes.len());
-                temp.remove_vertex(nodes[idx1]);
-                temp.remove_vertex(nodes[idx2]);
+                let (n1, n2) = pick_two(&nodes, rng);
+                temp.remove_vertex(n1);
+                temp.remove_vertex(n2);
                 temp.greedy_expand_in_pa();
             }
 
@@ -105,7 +103,8 @@ impl<'a> Clique<'a> {
 
     // 简单的根据pa中子图的度数顺序尽可能添加
     fn greedy_expand_in_pa(&mut self) {
-        let mut sorted: Vec<_> = self.pa
+        let mut sorted: Vec<_> = self
+            .pa
             .iter()
             .map(|&n| (n, self.degree_in_subgraph(n, &self.pa)))
             .collect();
@@ -201,21 +200,9 @@ impl<'a> GeneticAlgorithm<'a> {
         // 生成后代
         while new_population.len() < self.config.population_size {
             // 直接选两个不一样的
-            let parent1_idx = rng.random_range(0..self.population.len());
-            let parent2_idx = {
-                let mut idx;
-                loop {
-                    idx = rng.random_range(0..self.population.len());
-                    if idx != parent1_idx {
-                        break;
-                    }
-                }
-                idx
-            }; // 很不优雅，但是能跑
-            let parent1 = &self.population[parent1_idx];
-            let parent2 = &self.population[parent2_idx];
-            // 生育！繁殖！生一窝！
-            let mut child = self.crossover(parent1, parent2, &mut rng);
+            let (parent1, parent2) = pick_two(&self.population, &mut rng);
+            // 生育！
+            let mut child = self.crossover(parent1, parent2);
 
             if rng.random_bool(self.config.mutation_rate) {
                 self.mutate(&mut child, &mut rng);
@@ -227,7 +214,7 @@ impl<'a> GeneticAlgorithm<'a> {
         self.population = new_population;
     }
 
-    fn crossover(&self, p1: &Clique, p2: &Clique, rng: &mut impl Rng) -> Clique<'a> {
+    fn crossover(&self, p1: &Clique, p2: &Clique) -> Clique<'a> {
         // 交集交叉
         let common_nodes: HashSet<_> = p1.clique.intersection(&p2.clique).copied().collect();
         if !common_nodes.is_empty() {
@@ -253,8 +240,8 @@ impl<'a> GeneticAlgorithm<'a> {
         sorted_nodes.sort_unstable_by(|a, b| b.1.cmp(&a.1));
 
         let mut child = Clique::new(self.graph, sorted_nodes[0].0);
-        for (node,_) in &sorted_nodes[1..]{
-            if child.pa.contains(node){
+        for (node, _) in &sorted_nodes[1..] {
+            if child.pa.contains(node) {
                 child.add_vertex(*node);
             }
         }
@@ -262,7 +249,40 @@ impl<'a> GeneticAlgorithm<'a> {
         child
     }
 
+    fn mutate(&self, clique: &mut Clique, rng: &mut impl Rng) {
+        // 删掉一个先
+        let nodes: Vec<_> = clique.clique.iter().copied().collect();
+        let idx = rng.random_range(0..nodes.len());
+        clique.remove_vertex(&nodes[idx]);
+
+        // 一半的几率贪心扩展
+        if rng.random_bool(0.5) {
+            clique.greedy_expand_in_pa();
+            return;
+        }
+
+        // 另一半的几率随机拓展
+        while !clique.pa.is_empty(){
+            let node = clique.pa.iter().choose(rng).expect("should have at least one");
+            clique.add_vertex(*node);
+        }
+    }
+
     fn best_clique(&mut self) -> Vec<NodeIndex> {
         self.best_clique.iter().copied().collect()
+    }
+}
+
+fn pick_two<'a, T>(vec: &'a [T], rng: &mut impl Rng) -> (&'a T, &'a T) {
+    assert!(!vec.is_empty(), "Input Vec must not be empty.");
+
+    // 尝试选择两个不同的索引
+    let samples: Vec<_> = vec.choose_multiple(rng, 2).collect();
+
+    if samples.len() == 2 {
+        (samples[0], samples[1])
+    } else {
+        // 没办法了，只能同一个
+        (&vec[0], &vec[0])
     }
 }
