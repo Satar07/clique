@@ -13,10 +13,10 @@ struct GAConfig {
 impl Default for GAConfig {
     fn default() -> Self {
         GAConfig {
-            population_size: 100,
+            population_size: 70,
             mutation_rate: 0.1,
-            max_generations: 100,
-            shuffle_tolerance: 10,
+            max_generations: 70,
+            shuffle_tolerance: 8,
         }
     }
 }
@@ -177,14 +177,17 @@ impl<'a> GeneticAlgorithm<'a> {
         let mut rng = rand::rng();
         let mut new_population = Vec::with_capacity(self.config.population_size);
 
-        // 精英保留
-        self.population
-            .sort_unstable_by(|a, b| b.clique.len().cmp(&a.clique.len()));
-        let now_best = self.population[0].clone();
-        new_population.push(now_best);
+        // 精英保留(只需要找到最大值即可，无需排序)
+        let now_best = self
+            .population
+            .iter()
+            .max_by_key(|p| p.clique.len())
+            .unwrap()
+            .clone();
+        new_population.push(now_best.clone());
 
-        if self.population[0].clique.len() > self.best_clique.len() {
-            self.best_clique = self.population[0].clique.clone();
+        if now_best.clique.len() > self.best_clique.len() {
+            self.best_clique = now_best.clique.clone();
             self.stagnation_counter = 0;
         } else {
             self.stagnation_counter += 1;
@@ -262,8 +265,12 @@ impl<'a> GeneticAlgorithm<'a> {
         }
 
         // 另一半的几率随机拓展
-        while !clique.pa.is_empty(){
-            let node = clique.pa.iter().choose(rng).expect("should have at least one");
+        while !clique.pa.is_empty() {
+            let node = clique
+                .pa
+                .iter()
+                .choose(rng)
+                .expect("should have at least one");
             clique.add_vertex(*node);
         }
     }

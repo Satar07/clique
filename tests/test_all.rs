@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use clique::graph_reader::read_dimacs;
-    use clique::max_clique::{find_max_cliques};
+    use clique::max_clique::find_max_cliques;
     use rstest::rstest;
     use std::time::Instant;
 

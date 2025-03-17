@@ -7,17 +7,17 @@ pub fn find_max_cliques(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
     let (n, e) = (graph.node_count(), graph.edge_count());
     let density = 2.0 * e as f64 / (n * (n - 1)) as f64;
 
-    // 对于小图，直接使用 bk
-    if n <= 50
-        || (n <= 100 && density <= 0.9)
-        || (n < 200 && density <= 0.8)
-        || (n <= 500 && density <= 0.3)
-    {
-        return find_max_cliques_with_bk(graph);
-    }
+    // // 对于小图，直接使用 bk
+    // if n <= 50
+    //     || (n <= 100 && density <= 0.9)
+    //     || (n < 200 && density <= 0.8)
+    //     || (n <= 500 && density <= 0.3)
+    // {
+    //     return find_max_cliques_with_bk(graph);
+    // }
 
     // 大图使用遗传算法
-    return find_max_cliques_with_ga(graph);//TODO
+    return find_max_cliques_with_ga(graph);
 }
 
 fn find_max_cliques_with_bk(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
