@@ -17,9 +17,9 @@ struct GAConfig {
 impl Default for GAConfig {
     fn default() -> Self {
         GAConfig {
-            population_size: 100,
+            population_size: 120,
             mutation_rate: 0.1,
-            max_generations: 500,
+            max_generations: 200,
             shuffle_tolerance: 10,
         }
     }
