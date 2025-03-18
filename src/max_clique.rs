@@ -10,8 +10,8 @@ pub fn find_max_cliques(graph: &UnGraph<(), ()>) -> Vec<NodeIndex> {
     // 对于小图，直接使用 bk
     if n <= 50
         || (n <= 100 && density <= 0.9)
-        || (n < 200 && density <= 0.8)
-        || (n <= 500 && density <= 0.3)
+        || (n <= 200 && density <= 0.7)
+        || (n <= 500 && density <= 0.1)
     {
         return find_max_cliques_with_bk(graph);
     }

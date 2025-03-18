@@ -17,7 +17,6 @@ tokio = { version = "1", features = ["full"] }
 [profile.test]
 opt-level = 3
 debug = true
-target-cpu = "native"
 lto = true
 codegen-units = 1
 

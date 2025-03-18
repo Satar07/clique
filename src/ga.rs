@@ -4,14 +4,12 @@ use petgraph::{
     visit::EdgeRef,
 };
 use rand::prelude::*;
+use rayon::prelude::*;
 use std::ops::Not;
-
-// TODO 多线程优化
 
 #[derive(Clone)]
 struct GAConfig {
     population_size: usize,
-    mutation_rate: f64,
     max_generations: usize,
     shuffle_tolerance: usize,
     local_improvement_iter: usize,
@@ -20,9 +18,8 @@ struct GAConfig {
 impl Default for GAConfig {
     fn default() -> Self {
         GAConfig {
-            population_size: 120,
-            mutation_rate: 0.1,
-            max_generations: 200,
+            population_size: 10,
+            max_generations: 300,
             shuffle_tolerance: 10,
             local_improvement_iter: 10,
         }
@@ -113,7 +110,6 @@ impl<'a> Clique<'a> {
         (self.adj_matrix[node].clone() & subgraph).count_ones()
     }
 
-    // TODO 询问此处是否出错
     // 对当前最大团进行局部改进（随机移除两个节点，然后按度数排序重新加入）
     fn local_improvement(&mut self, iteration: usize, rng: &mut impl Rng) {
         let mut best = self.clone();
@@ -152,6 +148,7 @@ impl<'a> Clique<'a> {
 
         for (node, _) in sorted {
             if self.pa[node] {
+                assert!(node < self.node_count); // dbg
                 // 检查node是否还在PA中
                 self.add_vertex(node);
             }
@@ -176,6 +173,7 @@ struct GeneticAlgorithm<'a> {
     config: GAConfig,
     best_clique: BitVec,
     stagnation_counter: usize,
+    prev_best_count: usize,
 }
 
 impl<'a> GeneticAlgorithm<'a> {
@@ -186,8 +184,8 @@ impl<'a> GeneticAlgorithm<'a> {
 
         // 初始种群生成
         // 随机生成贪心极大团个体
-        for _ in 0..config.population_size - 1 {
-            let start = rng.random_range(0..node_count);
+        let starts = (0..node_count).choose_multiple(&mut rng, config.population_size - 1);
+        for start in starts {
             let mut clique = Clique::new(adj_matrix, start);
             clique.greedy_expand_in_pa();
             population.push(clique);
@@ -204,67 +202,110 @@ impl<'a> GeneticAlgorithm<'a> {
         let mut nb_clique = Clique::new(adj_matrix, max_degree_node);
         nb_clique.greedy_expand_in_pa();
         population.push(nb_clique);
+        let best_clique = population
+            .iter()
+            .max_by_key(|p| p.clique.count_ones())
+            .unwrap()
+            .clone()
+            .clique;
 
         GeneticAlgorithm {
             population,
             adj_matrix,
             config,
-            best_clique: bitvec![0;node_count],
+            best_clique,
             stagnation_counter: 0,
+            prev_best_count: 0,
+        }
+    }
+    
+    fn generate_random_population(&mut self) {
+        self.population.clear();
+        let starts = (0..self.adj_matrix.len()).choose_multiple(&mut rand::rng(), self.config.population_size - 1);
+        for start in starts {
+            let mut clique = Clique::new(self.adj_matrix, start);
+            clique.greedy_expand_in_pa();
+            self.population.push(clique);
         }
     }
 
     // main function
     fn evolve(&mut self) {
-        let mut rng = rand::rng();
-        let mut new_population = Vec::with_capacity(self.config.population_size);
-
-        // 精英保留(只需要找到最大值即可，无需排序)
-        let now_best = self
+        // 停滞处理
+        if self.prev_best_count == self.best_clique.count_ones() {
+            self.stagnation_counter += 1;
+            if self.stagnation_counter >= self.config.shuffle_tolerance {
+                // 重新洗牌
+                self.generate_random_population();
+                self.stagnation_counter = 0;
+            }
+        } else {
+            self.prev_best_count = self.best_clique.count_ones();
+            self.stagnation_counter = 0;
+        }
+        // 存储当前最优解
+        let mut local_best = self
             .population
             .iter()
             .max_by_key(|p| p.clique.count_ones())
             .unwrap()
             .clone();
-        new_population.push(now_best.clone());
-
-        if now_best.clique.count_ones() > self.best_clique.count_ones() {
-            self.best_clique = now_best.clique.clone();
-            self.stagnation_counter = 0;
-        } else {
-            self.stagnation_counter += 1;
+        if local_best.clique.count_ones() > self.best_clique.count_ones() {
+            // println!("New best: {}", local_best.clique.count_ones());
+            self.best_clique = local_best.clique.clone();
         }
 
-        // 停滞处理
-        if self.stagnation_counter >= self.config.shuffle_tolerance {
-            // 练废了，重开罢
-            *self = Self::new(self.adj_matrix, self.config.clone());
-            return;
-        }
+        // 精英保存
+        local_best.local_improvement(self.config.local_improvement_iter, &mut rand::rng());
+        self.population.push(local_best);
+        
+        // dbg
+        // for p in &self.population {
+        //     print!("{} ", p.clique.count_ones());
+        // }
+        println!();
+        // pause to debug
+        // std::thread::sleep(std::time::Duration::from_secs(1));
 
-        // 生成后代
-        while new_population.len() < self.config.population_size {
-            // 直接选两个不一样的
-            let (parent1, parent2) = pick_two(&self.population, &mut rng);
-            // 生育！
-            let mut child = self.crossover(parent1, parent2);
+        let mut new_population = Vec::with_capacity(self.config.population_size);
 
-            if rng.random_bool(self.config.mutation_rate) {
-                self.mutate(&mut child, &mut rng);
-            }
+        // 生成后代 多线程优化
+        let offspring: Vec<_> = (0..(self.config.population_size - 1))
+            .into_par_iter()
+            .map_init(
+                || rand::rng(),
+                |rng, _| {
+                    let (p1, p2) = pick_two(&self.population, rng);
+                    let mut child = self.crossover(p1, p2, rng);
 
-            child.local_improvement(self.config.local_improvement_iter, &mut rng);
-            new_population.push(child);
-        }
+                    if child.clique.count_ones() <= p1.clique.count_ones()
+                        || child.clique.count_ones() <= p2.clique.count_ones()
+                    {
+                        self.mutate(&mut child, rng);
+                    }
+
+                    child.local_improvement(self.config.local_improvement_iter, rng);
+                    child
+                },
+            )
+            .collect();
+        new_population.extend(offspring);
         self.population = new_population;
     }
 
-    fn crossover(&self, p1: &Clique, p2: &Clique) -> Clique<'a> {
+    fn crossover(&self, p1: &Clique, p2: &Clique, rng: &mut impl Rng) -> Clique<'a> {
         // 交集交叉
         let common_nodes: BitVec = p1.clique.clone() & p2.clique.clone();
         if common_nodes.any() {
-            let mut child = Clique::new(self.adj_matrix, common_nodes.iter_ones().next().unwrap());
-            for node in common_nodes.iter_ones() {
+            // 随机化会不会好一点?
+            let mut child = Clique::new(
+                self.adj_matrix,
+                common_nodes.iter_ones().choose(rng).unwrap(),
+            );
+            for node in common_nodes
+                .iter_ones()
+                .choose_multiple(rng, common_nodes.count_ones())
+            {
                 if child.pa[node] == true {
                     child.add_vertex(node); // 两个团的交一定是团
                 }
@@ -276,7 +317,7 @@ impl<'a> GeneticAlgorithm<'a> {
         // 交集是空的情况，使用贪心生成后代
         // 1. 取两个的并集
         // 2. 计算在这个子图中的度数排序，按这个顺序尽可能加入极大团
-        // 3. 若pa还没是空的，继续贪婪生成极大团
+        // 3. 若pa还没是空的，继续生成极大团
         let subgraph = p1.clique.clone() | p2.clique.clone();
         let mut sorted_nodes: Vec<_> = subgraph
             .iter_ones()
@@ -295,11 +336,11 @@ impl<'a> GeneticAlgorithm<'a> {
     }
 
     fn mutate(&self, clique: &mut Clique, rng: &mut impl Rng) {
-        if clique.clique.not_all() {
+        if clique.clique.not_any() {
             return;
         }
 
-        // 删掉一个先
+        // 删掉一个先（这里本来是有一个变异数的，不过取 1了就简化了）
         let nodes: Vec<_> = clique.clique.iter_ones().collect();
         let idx = rng.random_range(0..nodes.len());
         clique.remove_vertex(nodes[idx]);
