@@ -6,12 +6,15 @@ use petgraph::{
 use rand::prelude::*;
 use std::ops::Not;
 
+// TODO 多线程优化
+
 #[derive(Clone)]
 struct GAConfig {
     population_size: usize,
     mutation_rate: f64,
     max_generations: usize,
     shuffle_tolerance: usize,
+    local_improvement_iter: usize,
 }
 
 impl Default for GAConfig {
@@ -21,6 +24,7 @@ impl Default for GAConfig {
             mutation_rate: 0.1,
             max_generations: 200,
             shuffle_tolerance: 10,
+            local_improvement_iter: 10,
         }
     }
 }
@@ -85,26 +89,23 @@ impl<'a> Clique<'a> {
             return;
         }
 
-        self.clique.set(node, false);
+        // 保存剩余团的位向量
+        let mut remaining_clique = self.clique.clone();
+        remaining_clique.set(node, false);
 
-        if self.clique.count_ones() == 0 {
-            // 特殊情况：团为空
-            self.pa = bitvec![1; self.node_count];
-            return;
+        // Step 1: 恢复被移除节点排除的候选节点
+        self.pa |= &self.adj_matrix[node];
+
+        // Step 2: 排除团中已有的节点
+        self.pa &= &remaining_clique.clone().not();
+
+        // Step 3: 过滤出与剩余团全连接的节点
+        for clique_node in remaining_clique.iter_ones() {
+            self.pa &= &self.adj_matrix[clique_node];
         }
 
-        // 找第一个团中节点作为基准
-        let first_node = self.clique.iter_ones().next().unwrap();
-        let mut new_pa = self.adj_matrix[first_node].clone();
-
-        // 只遍历剩余的团中节点
-        for clique_node in self.clique.iter_ones().skip(1) {
-            new_pa &= &self.adj_matrix[clique_node];
-        }
-
-        // 排除团中节点
-        new_pa &= &self.clique.clone().not();
-        self.pa = new_pa;
+        // 更新团状态
+        self.clique = remaining_clique;
     }
 
     // 计算一个节点在子图中的度
@@ -112,6 +113,7 @@ impl<'a> Clique<'a> {
         (self.adj_matrix[node].clone() & subgraph).count_ones()
     }
 
+    // TODO 询问此处是否出错
     // 对当前最大团进行局部改进（随机移除两个节点，然后按度数排序重新加入）
     fn local_improvement(&mut self, iteration: usize, rng: &mut impl Rng) {
         let mut best = self.clone();
@@ -251,7 +253,7 @@ impl<'a> GeneticAlgorithm<'a> {
                 self.mutate(&mut child, &mut rng);
             }
 
-            child.local_improvement(10, &mut rng); // TODO 把这个 10 移到 Config 里
+            child.local_improvement(self.config.local_improvement_iter, &mut rng);
             new_population.push(child);
         }
         self.population = new_population;
@@ -275,10 +277,10 @@ impl<'a> GeneticAlgorithm<'a> {
         // 1. 取两个的并集
         // 2. 计算在这个子图中的度数排序，按这个顺序尽可能加入极大团
         // 3. 若pa还没是空的，继续贪婪生成极大团
-        let all_nodes = p1.clique.clone() | p2.clique.clone();
-        let mut sorted_nodes: Vec<_> = all_nodes
+        let subgraph = p1.clique.clone() | p2.clique.clone();
+        let mut sorted_nodes: Vec<_> = subgraph
             .iter_ones()
-            .map(|n| (n, self.adj_matrix[n].count_ones()))
+            .map(|n| (n, (subgraph.clone() & &self.adj_matrix[n]).count_ones()))
             .collect();
         sorted_nodes.sort_unstable_by_key(|&(_, deg)| std::cmp::Reverse(deg));
 
@@ -309,7 +311,7 @@ impl<'a> GeneticAlgorithm<'a> {
         }
 
         // 另一半的几率随机拓展
-        while !clique.pa.is_empty() {
+        while clique.pa.any() {
             let chosen = clique
                 .pa
                 .iter_ones()
