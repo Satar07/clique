@@ -1,5 +1,5 @@
 [profile.default]
 fail-fast = false
 slow-timeout = { period = "1m", terminate-after = 1 }
-success-output = "never"
-failure-output = "never"
+success-output = "final"
+failure-output = "final"
