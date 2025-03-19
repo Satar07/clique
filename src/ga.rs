@@ -18,7 +18,7 @@ struct GAConfig {
 impl Default for GAConfig {
     fn default() -> Self {
         GAConfig {
-            population_size: 10,
+            population_size: 15,
             max_generations: 300,
             shuffle_tolerance: 10,
             local_improvement_iter: 10,
@@ -263,7 +263,7 @@ impl<'a> GeneticAlgorithm<'a> {
         // for p in &self.population {
         //     print!("{} ", p.clique.count_ones());
         // }
-        println!();
+        // println!();
         // pause to debug
         // std::thread::sleep(std::time::Duration::from_secs(1));
 

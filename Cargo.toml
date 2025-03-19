@@ -16,10 +16,12 @@ tokio = { version = "1", features = ["full"] }
 
 [profile.test]
 opt-level = 3
-debug = true
+debug = false
 lto = true
 codegen-units = 1
 
 [profile.release]
-opt-level = 0
+opt-level = 3
 debug = true
+codegen-units = 1
+lto = true
