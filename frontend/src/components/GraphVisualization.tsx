@@ -26,9 +26,23 @@ interface Link {
 }
 
 const MAX_NODES = 1000;
-const NODE_SIZE = 3;
-const LINK_WIDTH = 0.5;
+const NODE_SIZE = 4;
+const LINK_WIDTH = 0.8;
 const CLUSTER_THRESHOLD = 50;
+
+// 定义新的颜色方案
+const COLORS = {
+  node: {
+    default: '#4a90e2',
+    highlight: '#f5222d',
+    text: '#ffffff',
+    background: '#ffffff'
+  },
+  link: {
+    default: '#e8e8e8',
+    highlight: '#ff7875'
+  }
+};
 
 const GraphVisualization: React.FC<GraphVisualizationProps> = ({ edges, maxClique }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -102,7 +116,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ edges, maxCliqu
     const nodes: Node[] = limitedNodes.map(id => ({
       id,
       val: maxClique.includes(id) ? NODE_SIZE * 1.5 : NODE_SIZE,
-      color: maxClique.includes(id) ? '#ff4d4f' : '#1890ff',
+      color: maxClique.includes(id) ? COLORS.node.highlight : COLORS.node.default,
       label: id.toString(),
       x: 0,
       y: 0,
@@ -112,7 +126,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ edges, maxCliqu
       id: index,
       source,
       target,
-      color: maxClique.includes(source) && maxClique.includes(target) ? '#ff4d4f' : '#d9d9d9',
+      color: maxClique.includes(source) && maxClique.includes(target) ? COLORS.link.highlight : COLORS.link.default,
       width: maxClique.includes(source) && maxClique.includes(target) ? LINK_WIDTH * 2 : LINK_WIDTH,
     }));
 
@@ -135,10 +149,12 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ edges, maxCliqu
       ref={containerRef}
       style={{
         width: '100%',
-        height: '600px',
-        border: '1px solid #d9d9d9',
-        borderRadius: '4px',
-        overflow: 'hidden'
+        height: 'calc(100vh - 200px)',
+        minHeight: '400px',
+        border: '1px solid #f0f0f0',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)'
       }}
     >
       <ForceGraph2D
@@ -155,9 +171,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ edges, maxCliqu
         d3VelocityDecay={0.4}
         width={dimensions.width}
         height={dimensions.height}
-        backgroundColor="#ffffff"
+        backgroundColor={COLORS.node.background}
         onEngineStop={() => {
-          // 图形稳定后自动适配视图
           if (containerRef.current) {
             const graph = containerRef.current.querySelector('canvas');
             if (graph) {
@@ -169,13 +184,13 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ edges, maxCliqu
         nodeCanvasObject={(node: Node, ctx: CanvasRenderingContext2D, globalScale: number) => {
           if (globalScale > 0.5) {
             const label = node.label;
-            const fontSize = 8 / globalScale;
-            ctx.font = `${fontSize}px Sans-Serif`;
+            const fontSize = 9 / globalScale;
+            ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial`;
             ctx.fillStyle = node.color;
             ctx.beginPath();
             ctx.arc(node.x, node.y, node.val, 0, 2 * Math.PI);
             ctx.fill();
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = COLORS.node.text;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(label, node.x, node.y);
