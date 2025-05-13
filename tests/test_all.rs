@@ -1,10 +1,9 @@
-
-
 #[cfg(test)]
 mod tests {
     use clique::graph_reader::read_dimacs;
     use clique::max_clique::find_max_cliques;
     use rstest::rstest;
+    use std::io::Write;
     use std::time::Instant;
 
     #[rstest]
@@ -47,16 +46,14 @@ mod tests {
     #[case::p_hat1500_3("p_hat1500-3.clq", 94)]
     #[tokio::test]
     #[allow(non_snake_case)]
-    async fn parallel_clique_test(
-        #[case] filename: &str,
-        #[case] expected_size: usize,  ) {
+    async fn parallel_clique_test(#[case] filename: &str, #[case] expected_size: usize) {
         // 1. 构建文件路径
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let file_path = format!("{}/data/{}", manifest_dir, filename);
-        
+
         // 2. 读取图数据
-        let graph = read_dimacs(&file_path)
-            .unwrap_or_else(|_| panic!("Failed to read {}", filename));
+        let graph =
+            read_dimacs(&file_path).unwrap_or_else(|_| panic!("Failed to read {}", filename));
 
         // 3. 执行算法并计时
         let start = Instant::now();
@@ -83,5 +80,28 @@ mod tests {
             graph.node_count(),
             graph.edge_count()
         );
+
+        // 6. 保存结果
+        let file_path = "test_results.txt";
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(file_path)
+            .unwrap_or_else(|_| panic!("Failed to open {}", file_path));
+        // format: | Case 名称       | 节点数 ｜ 边数 ｜ 图密度 | 实际团大小 | 期望团大小 | 运行时间 (秒) | 精度（实际/期望） |
+        // | -------------- | ----- | ----- | ----- | ----- | ----- | -------- | --------- |
+        writeln!(
+            file,
+            "| {:<20} | {:<10} | {:<10} | {:<10.3} | {:<15} | {:<15} | {:<15.3} | {:<15.3} |",
+            filename,
+            graph.node_count(),
+            graph.edge_count(),
+            graph.edge_count() as f64 / (graph.node_count() * (graph.node_count() - 1)) as f64,
+            clique.len(),
+            expected_size,
+            duration.as_secs_f64(),
+            clique.len() as f64 / expected_size as f64
+        )
+        .unwrap_or_else(|_| panic!("Failed to write to {}", file_path));
     }
 }
